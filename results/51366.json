@@ -1,0 +1,23 @@
+{
+    "Name":{
+        "Th28":"low level laser therapy",
+        "Th13":"drug therapy",
+        "Th38":"polytherapy",
+        "Th41":"protein therapy",
+        "Th49":"systemic therapy"
+    },
+    "Type":{
+        "Th28":"Physio",
+        "Th13":"Sugar",
+        "Th38":"Sugar",
+        "Th41":"Physio",
+        "Th49":"Sugar"
+    },
+    "Rating":{
+        "Th28":0.1359794428,
+        "Th13":0.1156584302,
+        "Th38":0.109944129,
+        "Th41":0.0980643241,
+        "Th49":0.0861692059
+    }
+}

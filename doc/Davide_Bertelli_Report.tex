@@ -1,0 +1,70 @@
+\documentclass[sigconf,edbt]{acmart-edbt2021}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\usepackage{booktabs} % For formal tables
+
+\setcopyright{none}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+
+
+\settopmatter{printacmref=false, printccs=false, printfolios=false}
+
+\pagestyle{empty} % removes running headers
+
+
+\begin{document}
+\title{Data Mining project}
+\subtitle{Recommendation system for Medical Environment}
+  
+
+\author{Bertelli Davide\\Artificial Intelligence Systems, $2^{nd}$ year.}
+\affiliation{%
+  \institution{University of Trento}
+  \streetaddress{Via Sommarive 9, Povo}
+  \city{Trento} 
+  \state{Italy} 
+  \postcode{38123}
+}
+\email{bertellidavide98@gmail.com}
+
+% The default list of authors is too long for headers}
+% \renewcommand{\shortauthors}{B. Trovato et al.}
+% \renewcommand{\shortauthors}{}
+
+
+\begin{abstract}
+This report provides the algorithms, formulations and code implementations that
+allowed to build a recommendation system applicable to the medical environment.
+The algorithm leveraged on the biological similarity among the known patients
+to provide its suggestions.
+The system implemented is an hybrid one which uses a content-based rating
+method as a baseline for its ratings and improves them through a collaborative
+filtering algorithm.
+The results of the system had been evaluated using the RMSE scoring strategy
+over datasets containing different numbers of available patients, and leading
+to an average RMSE value of 0.31.
+\end{abstract}
+
+
+\maketitle
+
+\input{Bertelli-body.tex}
+
+%%
+%% The next two lines define the bibliography style to be used, and
+%% the bibliography file.
+% \bibliographystyle{ACM-Reference-Format}
+% \bibliography{sample-base}
+
+%%
+%% If your work has an appendix, this is the place to put it.
+%% Please note that all the content must fit within the page limits, including any appendices.
+%\appendix
+%
+%\section{Research Methods}
+% ...
+
+\end{document}
+\endinput

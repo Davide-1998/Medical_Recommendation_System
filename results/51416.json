@@ -1,0 +1,23 @@
+{
+    "Name":{
+        "Th36":"neutron therapy",
+        "Th20":"phytotherapy",
+        "Th49":"systemic therapy",
+        "Th47":"stepdown therapy",
+        "Th1":"abortive therapy"
+    },
+    "Type":{
+        "Th36":"Acid",
+        "Th20":"Physio",
+        "Th49":"Sugar",
+        "Th47":"Sugar",
+        "Th1":"Physio"
+    },
+    "Rating":{
+        "Th36":0.2271077329,
+        "Th20":0.1487346196,
+        "Th49":0.1388545625,
+        "Th47":0.1259130685,
+        "Th1":0.1147907999
+    }
+}

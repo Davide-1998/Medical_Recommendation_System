@@ -1,0 +1,23 @@
+{
+    "Name":{
+        "Th19":"herbal therapy",
+        "Th7":"consolidation therapy",
+        "Th30":"medical nutrition therapy",
+        "Th40":"prophylactic therapy",
+        "Th28":"low level laser therapy"
+    },
+    "Type":{
+        "Th19":"Sugar",
+        "Th7":"Sugar",
+        "Th30":"Sugar",
+        "Th40":"Acid",
+        "Th28":"Physio"
+    },
+    "Rating":{
+        "Th19":0.1803867765,
+        "Th7":0.117997131,
+        "Th30":0.1059243724,
+        "Th40":0.1036885999,
+        "Th28":0.096035631
+    }
+}

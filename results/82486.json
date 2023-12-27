@@ -1,0 +1,23 @@
+{
+    "Name":{
+        "Th50":"Waon therapy",
+        "Th19":"herbal therapy",
+        "Th9":"crystal therapy",
+        "Th6":"chrysotherapy",
+        "Th38":"polytherapy"
+    },
+    "Type":{
+        "Th50":"Sugar",
+        "Th19":"Sugar",
+        "Th9":"Physio",
+        "Th6":"Sugar",
+        "Th38":"Sugar"
+    },
+    "Rating":{
+        "Th50":0.1990598581,
+        "Th19":0.1391998539,
+        "Th9":0.1352479982,
+        "Th6":0.1004835366,
+        "Th38":0.0971983795
+    }
+}
