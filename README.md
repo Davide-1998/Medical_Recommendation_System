@@ -184,4 +184,4 @@ the number of patients contained in the dataset.
 ## Further Reading
 
 A more extensive explanation of the provided work can be found in
-[Agorithm_and_Tests.pdf](https://github.com/Davide-1998/Medical_Recommendation_System/blob/master/doc/Agorithm_and_Tests.pdf).
+[Agorithm_and_Tests.pdf](https://github.com/Davide-1998/Medical_Recommendation_System/blob/c10cc9167661eb0b84a8645b7db290e71af89f8a/doc/Algorithm_and_Tests.pdf).
