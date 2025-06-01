@@ -1,7 +1,9 @@
+#!/bin/bash
+
 # Useful variables
 dataset=../data/datasetB.json
 patients=../data/datasetB_cases.txt
-python=python3  # Version of Python to use -> 3.8.10
+python=python3
 
 # Start recommendation system over professor's dataset
 $python Medical_recommendations.py -d $dataset --recommend $patients

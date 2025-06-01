@@ -52,10 +52,6 @@ def extract_condition_webpage(url, targetFile='Condition_website.html'):
 
     conditions = []
 
-    # for line in webpage:
-    #     if url in line:
-    #         conditions.append(line)
-
     nextSave = False
     for line in webpage:
         if nextSave:
@@ -76,32 +72,14 @@ def extract_condition_webpage(url, targetFile='Condition_website.html'):
             while line[idx_stop] != ')':
                 idx_stop += 1
             line = line[:idx_start-1] + line[idx_stop+1:]
-
-        '''
-        line = el.split(' ')[1]
-        line = line.replace('"', '')
-        line = line.split('/')[-1]
-        line = line.replace('-', ' ')
-        if '(' in line:
-            idx = line.index('(')
-            line = line[:idx]
-        '''
         conditions[conditions.index(el)] = line.strip()
-
-    # cond_copy = conditions.copy()
-    # singleWord = set()
-    # doubleWord = set()
-    # unexplained = set()
 
     types = set()
     for el in conditions:
         if len(el.split(' ')) == 1:
             types.add(el)
-            # singleWord.add(el)
-            # cond_copy.remove(el)
 
         elif len(el.split(' ')) == 2 or len(el.split(' ')) == 3:
-            # doubleWord.add(el)
             single = el.split(' ')[-1]
             if single.casefold() in ['children', 'adults']:  # Flag list
                 if len(el.split(' ')) == 2:
@@ -113,12 +91,6 @@ def extract_condition_webpage(url, targetFile='Condition_website.html'):
                 else:
                     single = el.split(' ')[-2].replace(':', '')
             types.add(single)
-        # else:
-        #     _type = el
-        #     # singleWord.add(single)
-        #     # cond_copy.remove(el)
-
-        # conditions[conditions.index(el)] = [el, _type]
 
     condition_type = []
     for el in conditions:
