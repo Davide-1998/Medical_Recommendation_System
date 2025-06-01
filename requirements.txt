@@ -1,0 +1,6 @@
+names-dataset
+pandas
+matplotlib
+sklearn
+tqdm
+#urllib3
