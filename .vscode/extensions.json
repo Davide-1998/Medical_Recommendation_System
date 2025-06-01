@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "esbenp.prettier-vscode",
+    "timonwong.shellcheck",
+    "Gruntfuggly.todo-tree",
+    "DavidAnson.vscode-markdownlint"
+  ]
+}
