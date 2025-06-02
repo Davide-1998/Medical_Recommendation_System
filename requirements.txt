@@ -1,6 +1,7 @@
 names-dataset
 pandas
 matplotlib
-sklearn
+scikit-learn
 tqdm
-#urllib3
+urllib3
+certifi

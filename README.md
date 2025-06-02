@@ -10,10 +10,10 @@ apply recommendation systems algorithms to suggest the next best therapy to any 
 This code has been written majorly with python 3.x, thus any machine having a pyhton interpreter can run it.  
 Anyway, being developed on a Linux machine some requirements for the OS are necessary.
 
-|   OS    |        Packages        |
-| :-----: | :--------------------: |
-|  Linux  | wget </br> python v3.x |
-| Windows |      python v3.x       |
+|   OS    |  Packages   |
+| :-----: | :---------: |
+|  Linux  | python v3.x |
+| Windows | python v3.x |
 
 Python environment code requirements have been provided in the `requirements.txt` file in the root folder.  
 It is warmly suggested to use a python environment to avoid conflicting packages with your underlying python
@@ -185,12 +185,7 @@ of their roles:
 
 - `extractor.py`: It is the script responsible for the download and
   refinement of the data contained in the webpages from which the
-  conditions and therapies have been taken.  
-   It is an "hard-coded" solution that works only on systems in which
-  the program `wget` is installed.  
-   In case of linux systems it is possible to install it through the
-  command:  
-   `sudo apt install wget -y`
+  conditions and therapies have been taken.
 - `Medical_recommendations.py`: It is the file in which is implemented
   the recommendation system.
 
@@ -230,7 +225,3 @@ the number of patients contained in the dataset.
 
 A more extensive explanation of the provided work can be found in
 [Agorithm_and_Tests.pdf](https://github.com/Davide-1998/Medical_Recommendation_System/blob/c10cc9167661eb0b84a8645b7db290e71af89f8a/doc/Algorithm_and_Tests.pdf).
-
-## TODOs
-
-- Add [urllib3](https://urllib3.readthedocs.io/en/stable/index.html) support to not require wget installation
