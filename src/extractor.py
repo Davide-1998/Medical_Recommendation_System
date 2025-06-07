@@ -27,7 +27,7 @@ def get_webpage_data(url: str, cache_response = False, cache_filepath='webpage.h
 
     if cache_response and not os.path.isfile(cache_filepath):
         # Build absolute file path
-        os.path.abspath(cache_filepath)
+        cache_filepath = os.path.abspath(cache_filepath)
 
         # Build folder hierarchy whenever it is not available
         if not os.path.isdir(os.path.dirname(cache_filepath)):
@@ -111,8 +111,6 @@ def extract_condition_webpage(url, cache_http_response=False, target_file='Condi
             condition_type.append([item, item])
         else:
             condition_type.append([item, splitted_condition[-1]])
-
-    print(condition_type)
     return condition_type
 
 
@@ -176,6 +174,9 @@ def extract_therapy_webpage(url, cache_http_response=False, target_file='Therapy
 
 
 if __name__ == '__main__':
+    # Root folder of the project
+    PROJECT_ROOT_DIRECTORY = os.path.dirname(os.path.dirname(__file__))
+
     # Tell whether or not to print found conditions and therapies
     PRINT_FOUND_DATA = False
 
@@ -183,7 +184,7 @@ if __name__ == '__main__':
     SAVE_WEBPAGES_RESPONSE = False
 
     # Location where to save the http responses if the SAVE_WEBPAGES_RESPONSE is True
-    TEMP_DATA_DIR = os.path.join(os.getcwd(), 'data', 'temp')
+    TEMP_DATA_DIR = os.path.join(PROJECT_ROOT_DIRECTORY, 'data', 'temp')
 
     # Query and download conditions
     CONDITIONS_URL = 'https://www.nhsinform.scot/illnesses-and-conditions/a-to-z'

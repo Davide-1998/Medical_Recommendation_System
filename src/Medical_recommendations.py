@@ -1,45 +1,57 @@
-import os
-import json
-import pandas as pd
-import argparse
+'''
+Main script for evaluating the medical recommendation system
+'''
 
-from random import choice
+import argparse
 from datetime import date, timedelta
-from tqdm import tqdm
+import json
+from math import sqrt
+import os
+from random import choice
 from time import time
 
-from names_dataset import NameDatasetV1
-from extractor import extract_condition_webpage, extract_therapy_webpage
+import pandas as pd
+from tqdm import tqdm
+
+from names_dataset import NameDataset
 from sklearn.metrics import mean_squared_error as RMSE
-from math import sqrt
 import matplotlib.pyplot as plt
 
-DATA_DIR = os.path.abspath('../data')
-RESULTS_DIR = os.path.abspath('../results')
-STATS_DIR = RESULTS_DIR + os.sep + 'Stats'
+from extractor import extract_condition_webpage, extract_therapy_webpage
 
 
-def check_dirs():
-    # Ensure existance of dirs
-    for el in [RESULTS_DIR, STATS_DIR]:
-        if not os.path.isdir(el):
-            os.mkdir(el, 0o777)
-            print('Created: {}'.format(el))
+def exists_or_create_directory(directory_path: str, access_mode: int=0o777) -> None:
+    '''
+    Function that checks the existance of a directory,
+    otherwise it creates it with the specified acess mode.
+    '''
+    if not os.path.isdir(directory_path):
+        os.makedirs(directory_path, access_mode)
+        print(f'Created: {directory_path}')
 
 
-def stat_interaction(fileName, whatToSave=None):
+def stat_interaction(stats_directory_path, filename, what_to_save=None):
+    '''
+    Function to open a stream towards a file of statistics data.
+    if the parameter 'what_to_save' if populated with an object that
+    can be converted to string, then it will be appended to the contents 
+    of the file, otherwise the file will be read
+    '''
+
     data = []
-
-    if whatToSave is not None:
-        stream_stat = open(STATS_DIR + os.sep + '{}'.format(fileName), 'a')
-        stream_stat.write('{}\n'.format(whatToSave))
-    else:
-        stream_stat = open(STATS_DIR + os.sep + '{}'.format(fileName), 'r')
-        for line in stream_stat:
-            data.append(float(line.strip()))
-    stream_stat.close()
-    if len(data) > 0:
-        return data
+    exists_or_create_directory(stats_directory_path)
+    stream_mode = 'a' if what_to_save is not None else 'r'
+    filepath = os.path.join(stats_directory_path, filename)
+    with open(filepath, stream_mode, encoding="utf-8") as stream_stat:
+        # Save stats file
+        if what_to_save is not None:
+            stream_stat.write(f'{what_to_save}\n')
+        else:
+            # Read from stats file
+            for line in stream_stat:
+                data.append(float(line.strip()))
+        stream_stat.close()
+    return data
 
 
 class Entity():
@@ -67,8 +79,7 @@ class Entity():
 
         self.id = str(_id)
         self.name = str(_name)
-        if _type is not None:
-            self.update_type(_type)
+        self.type = _type
 
     def update_type(self, _type):
         '''
@@ -77,8 +88,7 @@ class Entity():
         '''
 
         if 'type' in self.__dict__:
-            print('The type of {} is changed from \'{}\' to \'{}\''
-                  .format(self.id, self.type, _type))
+            print(f'The type of {self.id} is changed from \'{self.type}\' to \'{_type}\'')
         self.type = str(_type)
 
     def toDict(self):
@@ -228,7 +238,7 @@ class Trial():
             success = float(success.replace('%', ''))
         if int(success) >= 1:
             success = int(success) / 100
-        self.successful = '{:0.2%}'.format(success)
+        self.successful = f'{success:0.2%}'
 
     def fromDict(self, loadedDict):
         '''
@@ -252,12 +262,8 @@ class Trial():
             Adds a tab spacing in the formatting of the string.
         '''
 
-        if not indent:
-            for key, value in self.__dict__.items():
-                print('{:<10} : {:<10}'.format(key, value))
-        else:
-            for key, value in self.__dict__.items():
-                print('\t{:<10} : {:<10}'.format(key, value))
+        for key, value in self.__dict__.items():
+            print(f"{'\t' if indent else ''}{key:<10} : {value:<10}")
 
 
 class PCondition():
@@ -402,11 +408,11 @@ class Patient(Entity):
         data['trials'] = [x.toDict() for x in self.trials]
         return data
 
-    def save_in_json(self, nameFile=None):
+    def save_in_json(self, name_file=None):
         '''
         Method to save the Patient class in a .json file on the device.
 
-        nameFile: str
+        name_file: str
             FileName in which to save the class. If None a combination
             of the id and the name will be used as the name. If
             a string is given, if it doesn't contain a path, the local
@@ -414,57 +420,57 @@ class Patient(Entity):
         '''
 
         data = self.__dict__
-        if nameFile is None:
-            nameFile = os.getcwd() + os.sep
-            nameFile += '{}_{}'.format(self.id, self.name)
+        if name_file is None:
+            name_file = os.getcwd() + os.sep
+            name_file += f'{self.id}_{self.name}'
         else:
-            if os.sep not in nameFile:
-                nameFile = os.getcwd() + os.sep + nameFile
+            if os.sep not in name_file:
+                name_file = os.getcwd() + os.sep + name_file
             else:
-                if not os.path.isfile(nameFile):
-                    print('No file \'{}\' found.'.format(nameFile))
-        if '.json' not in nameFile:
-            nameFile += '.json'
+                if not os.path.isfile(name_file):
+                    print(f'No file \'{name_file}\' found.')
+        if '.json' not in name_file:
+            name_file += '.json'
 
-        stream_out = open(nameFile, 'w')
-        json.dump(data, stream_out, indent=4)
-        stream_out.close()
+        with open(name_file, 'w', encoding="utf-8") as stream_out:
+            json.dump(data, stream_out, indent=4)
+            stream_out.close()
 
-    def from_json(self, nameFile, pathToFile=None):
+    def from_json(self, name_file, path_to_file=None):
         '''
         This method allows to load a json file of a patient in the
         class.
 
-        nameFile: str
+        name_file: str
             Is the name of the file from which data will be collected.
-        pathToFile: str
+        path_to_file: str
             Filepath in which the file is located. If None the local
             one is assumed: os.getcwd()
         '''
 
-        if pathToFile is None:
-            pathToFile = os.getcwd() + os.sep
+        if path_to_file is None:
+            path_to_file = os.getcwd() + os.sep
 
-        stream_in = open(pathToFile + nameFile, 'r')
-        loaded_patient = json.load(stream_in)
-        stream_in.close()
+        with open(path_to_file + name_file, 'r', encoding="utf-8") as json_stream_in:
+            loaded_patient = json.load(json_stream_in)
+        json_stream_in.close()
 
         self.from_dict(loaded_patient)
 
-    def from_dict(self, loadedDict):
+    def from_dict(self, loaded_dictionary):
         '''
         Loads the data coming from a loaded dictionary into the class.
 
-        loadedDict: dict
+        loaded_dictionary: dict
         '''
 
-        self.id = str(loadedDict['id'])
-        self.name = str(loadedDict['name'])
+        self.id = str(loaded_dictionary['id'])
+        self.name = str(loaded_dictionary['name'])
 
-        for c in loadedDict['conditions']:
+        for c in loaded_dictionary['conditions']:
             temp_c = PCondition(c['id'], c['diagnosed'], c['cured'], c['kind'])
             self.conditions.append(temp_c)
-        for t in loadedDict['trials']:
+        for t in loaded_dictionary['trials']:
             temp_t = Trial(t['id'], t['start'], t['end'], t['condition'],
                            t['therapy'], t['successful'])
             self.trials.append(temp_t)
@@ -483,7 +489,7 @@ class Patient(Entity):
         while self.conditions[i].id != pcondition_id:
             i += 1
             if i == len(self.conditions):
-                print('No condition {} in dataset'.format(pcondition_id))
+                print(f'No condition {pcondition_id} in dataset')
                 return
         return self.conditions[i].kind
 
@@ -509,9 +515,9 @@ class Patient(Entity):
 
         for key, value in self.__dict__.items():
             if not isinstance(value, list):
-                print('{:<10} : {:<10}'.format(key, value))
+                print(f'{key:<10} : {value:<10}')
             else:
-                print('{} :'.format(key), '-'*31)
+                print(f'{key} :', '-'*31)
                 for t in value:
                     t.Print(indent=True)
                     print('\t', '-'*15, '*', '-'*15)
@@ -577,7 +583,7 @@ class Dataset():
         # Force maximum in the utility matrix to be 1
         utility_matrix /= max(utility_matrix.max())
 
-        print('Utility matrix has size: {}'.format(utility_matrix.shape))
+        print(f'Utility matrix has size: {utility_matrix.shape}')
         return utility_matrix
 
     def get_condition(self, condition_id):
@@ -662,16 +668,17 @@ class Dataset():
         else:
             self.Patients.append(entry)
 
-    def save_in_json(self, filePath=DATA_DIR, nameFile='Dataset.json'):
+    def save_in_json(self, file_path=os.path.dirname(os.path.dirname(__file__)),
+                     name_file='Dataset.json'):
         '''
         Method used to save the class data into a .json file.
 
         Arguments
         ---------
-        filePath: str
+        file_path: str
             Path in which to save the json file. If None the local one is
             assumed.
-        nameFile: str
+        name_file: str
             Is the name under which the file is saved.
         '''
 
@@ -681,32 +688,34 @@ class Dataset():
         data['Therapies'] = [x.toDict() for x in self.Therapies]
         data['Patients'] = [x.toDict() for x in self.Patients]
 
-        if os.sep not in filePath:
-            filePath = DATA_DIR + os.sep + filePath
-        if filePath[-1] != os.sep:
-            filePath += os.sep
-        stream_out = open(filePath + nameFile, 'w')
-        json.dump(data, stream_out, indent=4)
-        stream_out.close()
+        if os.sep not in file_path:
+            file_path = os.path.dirname(os.path.dirname(__file__)) + os.sep + file_path
+        if file_path[-1] != os.sep:
+            file_path += os.sep
+        with open(file_path + name_file, 'w', encoding="utf-8") as json_stream_out:
+            json.dump(data, json_stream_out, indent=4)
+        json_stream_out.close()
 
-    def from_json(self, filePath=DATA_DIR, nameFile='Dataset.json'):
+    def from_json(self, file_path=os.path.dirname(os.path.dirname(__file__)),
+                  name_file='Dataset.json'):
         '''
         Loads a json file data into the Dataset class.
 
-        filePath: str
+        file_path: str
             Path from which the file is taken.
-        nameFile: str
+        name_file: str
             Name of the file from which to load
         '''
 
-        if filePath is None or filePath == '':
-            filePath = DATA_DIR
+        if file_path is None or file_path == '':
+            file_path = os.path.dirname(os.path.dirname(__file__))
 
-        if filePath[-1] != os.sep:
-            filePath += os.sep
-        stream_in = open(filePath + nameFile, 'r')
-        loaded_dataset = json.load(stream_in)
-        stream_in.close()
+        if file_path[-1] != os.sep:
+            file_path += os.sep
+
+        with open(file_path + name_file, 'r', encoding="utf-8") as json_stream_in:
+            loaded_dataset = json.load(json_stream_in)
+        json_stream_in.close()
 
         for key, value in loaded_dataset.items():
             if key == 'Conditions':
@@ -734,10 +743,10 @@ class Dataset():
                     # temp_p.fromDict(el)
                     self.Patients.append(temp_p)
 
-        print('Added {} entries to the dataset'
-              .format(sum(len(x) for x in loaded_dataset.values())))
+        tot_entries = sum(len(x) for x in loaded_dataset.values())
+        print(f'Added {tot_entries} entries to the dataset')
 
-    def random_fill(self, patients_num=0):
+    def random_fill(self, result_save_path, patients_num=0):
         '''
         Method to randommly fill a Dataset class with random data.
         It uses a pool for the conditions and therapies names.
@@ -754,19 +763,17 @@ class Dataset():
             together with all the available conditions and therapies.
         '''
 
-        target_dir = '../data/temp'
+        target_dir = os.path.join(result_save_path, 'temp')
 
-        cond_file = target_dir + os.sep + 'Conditions.html'
-        cond_url = 'https://www.nhsinform.scot/illnesses-and-conditions/a-to-z'
-        conditions_name_pool = extract_condition_webpage(cond_url, cond_file)
-        # conditionID_pool = list(range(1, len(conditions_name_pool)))
+        conditions_file = target_dir + os.sep + 'Conditions.html'
+        conditions_url = 'https://www.nhsinform.scot/illnesses-and-conditions/a-to-z'
+        conditions_name_pool = extract_condition_webpage(conditions_url, False, conditions_file)
 
-        ther_file = target_dir + os.sep + 'Therapies.html'
+        therapies_file = target_dir + os.sep + 'Therapies.html'
         therapies_url = 'https://en.wikipedia.org/wiki/List_of_therapies'
-        therapies_name_pool = extract_therapy_webpage(therapies_url, ther_file)
-        # therapyID_pool = list(range(1, len(therapies_name_pool)))
+        therapies_name_pool = extract_therapy_webpage(therapies_url, False, therapies_file)
 
-        names_pool = NameDatasetV1()
+        names_pool = NameDataset()
         firstN_pool = list(names_pool.first_names)
         lastN_pool = list(names_pool.last_names)
         nameID_pool = list(range(1, len(firstN_pool)))
@@ -776,7 +783,7 @@ class Dataset():
             pbar.set_description('Adding conditions to dataset')
             for condition in conditions_name_pool:
                 cond_index = conditions_name_pool.index(condition)
-                cond_id = 'Cond%d' % (cond_index + 1)
+                cond_id = f'Cond{cond_index + 1}'
                 temp_cond = Condition(cond_id, condition[0], condition[1])
                 self.add_entry(temp_cond)
                 pbar.update(1)
@@ -786,7 +793,7 @@ class Dataset():
         with tqdm(total=len(therapies_name_pool)) as pbar:
             pbar.set_description('Adding therapies to dataset')
             for i in range(len(therapies_name_pool)):
-                ther_id = 'Th%d' % (i + 1)
+                ther_id = f'Th{i+1}'
                 therapy = therapies_name_pool[i]
                 temp_ther = Therapy(ther_id, therapy[0], therapy[1])
                 self.add_entry(temp_ther)
@@ -829,7 +836,7 @@ class Dataset():
                         rand_c_date = random_date(rand_d_date, death_date)
                     if rand_c_date is None:
                         rand_c_date = str(rand_c_date)  # Saves 'None'
-                    temp_pcond = PCondition('pc%d' % num_cond,
+                    temp_pcond = PCondition(f'pc{num_cond}',
                                             rand_d_date, rand_c_date,
                                             rand_cond.id)
                     rand_patient.add_condition(temp_pcond)
@@ -838,7 +845,7 @@ class Dataset():
                 for cond in rand_patient.conditions:
                     last_trial = None
                     cured = False
-                    for t in range(1, choice(range(2, 11))):  # max 10 trials
+                    for trial_num in range(1, choice(range(2, 11))):  # max 10 trials
                         chosen_therapies_pool = []
                         if not cured:
                             start_cond = cond.diagnosed
@@ -860,31 +867,12 @@ class Dataset():
 
                             success = choice(range(0, 101, 1)) / 100
 
-                            '''
-                            if success == 1 and rand_c_date != 'None':
-                                temp_trial = Trial('tr%d' % t,
-                                                   last_trial, end_trial,
-                                                   cond.id, temp_th.id,
-                                                   success)
-                                rand_patient.add_trial(temp_trial)
-                                cured = True
-                            else:
-                                if success == 1:
-                                    success = choice(range(0, 100, 1)) / 100
-                                temp_trial = Trial('tr%d' % t,
-                                                   last_trial, end_trial,
-                                                   cond.id, temp_th.id,
-                                                   success)
-                                last_trial = end_trial  # No retroactive trials
-
-                                rand_patient.add_trial(temp_trial)
-                            '''
                             if success == 1:
                                 if rand_c_date != 'None':
                                     cured = True
                                 else:
                                     success = choice(range(0, 100, 1)) / 100
-                            temp_trial = Trial('tr%d' % t,
+                            temp_trial = Trial(f'tr{trial_num}',
                                                last_trial, end_trial,
                                                cond.id, temp_th.id,
                                                success)
@@ -948,14 +936,25 @@ class Dataset():
                     print('\n')
 
 
-def strDate_to_iso(strDate='20010101'):
-    # Format is yyyymmdd
-    iso_str = '{}-{}-{}'.format(strDate[:4], strDate[4:6], strDate[6:])
+def strDate_to_iso(strDate: str='20010101'):
+    '''
+    This function converst a string date to the ISO format.
+    Input string must have the date in the format YYYYMMDD
+    '''
+
+    iso_str = f'{strDate[:4]}-{strDate[4:6]}-{strDate[6:]}'
     date_iso = date.fromisoformat(iso_str)
     return date_iso
 
 
-def random_date(start_date='20010101', end_date='20011001'):
+def random_date(start_date='20010101', end_date='20010101'):
+    '''
+    This function generates a random date between
+    start_date and end_date. Both parameters must be
+    strings in the format YYYYMMDD default is 20010101
+    1st January 2001
+    '''
+
     if end_date is None or end_date == 'None':
         end_date = date.today()
     if isinstance(start_date, str):
@@ -1037,7 +1036,6 @@ def similarity_computation(utility_matrix, query_patient):
     nearest_neighbours = similarities[euclidean_sim].copy()
     nearest_neighbours = nearest_neighbours.dropna()
 
-    # '''
     # Find patients which answered as query if it had tried at least 1 th
     biology_vec = patient_vec.copy().dropna()
     response_tolerance = 0.1  # 10% tolerance in the values
@@ -1053,12 +1051,7 @@ def similarity_computation(utility_matrix, query_patient):
                 same_biology.loc[patient] = retained
         # same_biology = same_biology[same_biology[:] == biology_vec[:]].dropna()
         same_biology = same_biology.dropna()
-        print('Same biology matrix has size: {}'.format(same_biology.shape))
-        # same_biology = same_biology.dropna()  # Remove useless patients
-        # print('Patients with same biology:\n', same_biology)
-        # print('Query patient answer: {}'.format(biology_vec))
-
-        # print(same_biology[same_biology[:] == biology_vec[:]].dropna())
+        print(f'Same biology matrix has size: {same_biology.shape}')
 
         intersection = nearest_neighbours.filter(same_biology.index,
                                                  axis=0).copy()
@@ -1067,30 +1060,26 @@ def similarity_computation(utility_matrix, query_patient):
         for patient in intersection.index:
             nearest_neighbours.loc[patient]['euclidean'] -= 1
         # similarities.loc[patient]['cosine'] *= 2
-    # '''
 
     return nearest_neighbours
 
 
-def check_fullna(obj, returnMean=False):
+def check_fullna(obj, return_mean=False):
     to_return = None
     if isinstance(obj, pd.DataFrame):
         not_nan_shape = obj.dropna(how='all').shape
         if 0 in not_nan_shape:
             return pd.Series([0 for i in range(not_nan_shape[1])])
-        else:
-            to_return = obj
+        to_return = obj
 
     elif isinstance(obj, pd.Series):
         if len(obj.dropna()) == 0:
             return 0
-        else:
-            to_return = obj
+        to_return = obj
 
-    if returnMean:
+    if return_mean:
         return to_return.mean()
-    else:
-        return to_return
+    return to_return
 
 
 def baseline_computation(utility_matrix, query_patient, query_therapy):
@@ -1187,7 +1176,7 @@ def rating_computation(utility_matrix, query_patient, nearest_neighbours,
                 rating /= sim_sum
             else:
                 rating /= 1
-            rating_vector[therapy] = (baseline + rating)
+            rating_vector[therapy] = baseline + rating
     rating_vector = rating_vector.sort_values(ascending=False)
 
     # Remove already done therapies
@@ -1199,7 +1188,7 @@ def rating_computation(utility_matrix, query_patient, nearest_neighbours,
     return rating_vector.iloc[:5].copy().fillna(0)
 
 
-def medical_recommendation(dataset, patients_ids, query_condition, save=False):
+def medical_recommendation(dataset, patients_ids, query_condition, stats_directory_path):
     '''
     This method is used to compute the best recommendations for each patient
     given a specific condition.
@@ -1219,8 +1208,6 @@ def medical_recommendation(dataset, patients_ids, query_condition, save=False):
         It is the list of patients ids for which a recommendation must be done.
     query_condition: string
         It is the condition id for which the recommendation is required.
-    save: bool
-        Flags whether or not to save the results.
 
     Returns:
     therapy_ans: dict
@@ -1231,47 +1218,45 @@ def medical_recommendation(dataset, patients_ids, query_condition, save=False):
 
     if isinstance(dataset, str):  # A path is given
         path = os.path.dirname(dataset)
-        nameFile = os.path.basename(dataset)
-        D = Dataset()
-        D.from_json(path, nameFile)
+        name_file = os.path.basename(dataset)
+        reference_dataset = Dataset()
+        reference_dataset.from_json(path, name_file)
     elif isinstance(dataset, Dataset):
         print('A Dataset class has been passed. \nNo loading action.')
     else:
-        print('The dataset type <{}> is not supported'
-              .format(type(dataset)))
+        print(f'The dataset type <{type(dataset)}> is not supported')
         return
 
     therapy_ans = {}
 
     if len(patients_ids) == 1 and os.sep in patients_ids[0]:  # Is file
-        filePath = patients_ids[0]
-        if '.txt' in filePath:
-            stream_in = open(filePath, 'r')
-            id_list = []
-            pc_list = []
-            for line in stream_in:
-                data = line.split('\t')
-                if len(data) > 2:
-                    id_list.append(data[0])
-                    pc_list.append(data[-1].replace('\n', ''))
-            stream_in.close()
+        file_path = patients_ids[0]
+        if '.txt' in file_path:
+            with open(file_path, 'r', encoding="utf-8") as patients_stream:
+                id_list = []
+                pc_list = []
+                for line in patients_stream:
+                    data = line.split('\t')
+                    if len(data) > 2:
+                        id_list.append(data[0])
+                        pc_list.append(data[-1].replace('\n', ''))
+            patients_stream.close()
             patients_ids = id_list
             query_condition = pc_list
 
     for p_id in patients_ids:  # For all query patient
         start_time = time()
 
-        query_patient = D.get_patient(p_id)
+        query_patient = reference_dataset.get_patient(p_id)
         if query_patient is None:
             return
         idx = patients_ids.index(p_id)
         condition_id = query_patient.get_condition(query_condition[idx])
 
-        condition_name = D.get_condition(condition_id)
-        print('Started Recommendation for patient \'%s\' and condition \'%s\':'
-              % (p_id, condition_name))
+        condition_name = reference_dataset.get_condition(condition_id)
+        print(f'Started Recommendation for patient \'{p_id}\' and condition \'{condition_name}\':')
 
-        query_matrix = D.make_utility_matrix(condition_id)
+        query_matrix = reference_dataset.make_utility_matrix(condition_id)
 
         # Compute similarity in the DataFrame
         nearest_neighbours = similarity_computation(query_matrix,
@@ -1283,17 +1268,19 @@ def medical_recommendation(dataset, patients_ids, query_condition, save=False):
         answer_cols = ['Name', 'Type', 'Rating']
         ans = pd.DataFrame(columns=answer_cols)
 
-        for x, y in recommend.items():
-            name, kind = D.get_therapy(x)
-            ans.loc[x] = pd.Series([name, kind, y], index=answer_cols)
+        for therapy_id, therapy_rating in recommend.items():
+            therapy_name, therapy_kind = reference_dataset.get_therapy(therapy_id)
+            ans.loc[therapy_id] = pd.Series([therapy_name, therapy_kind, therapy_rating],
+                                            index=answer_cols)
 
         therapy_ans[query_patient.id] = ans
 
         # Saving time statistics
         tot_time = time() - start_time
-        stat_interaction('run_time_%d_patients.txt' % len(D.Patients),
+        stat_interaction(stats_directory_path,
+                         f'run_time_{len(reference_dataset.Patients)}_patients.txt',
                          tot_time)
-        print('Recommendation time: {:0.4f}[s]'.format(tot_time))
+        print(f'Recommendation time: {tot_time:0.4f}[s]')
     return therapy_ans
 
 
@@ -1322,61 +1309,53 @@ def random_sample_patient(utility_matrix):
     return patient_vec
 
 
-def evaluation(datasetList='None', iterations=3):
+def evaluation(stats_save_directory, dataset_list='None', iterations=3, random_fill_save_path=os.getcwd()):
     '''
     This method is used to evaluate the recommendation system proposed.
-
-    Arguments
-    ---------
-    dataset:str
-        Is the path to the dataset to use for building the utility matrix
-        used during the evaluation.
     '''
 
     print('Evaluation Started')
-    loadedDatasets = {}  # List of Dataset classes
+    loaded_datasets = {}  # List of Dataset classes
     eval_results_dict = {}
 
-    if datasetList == 'None':
+    if dataset_list == None:
         patients_nums = [25, 50, 100, 150]
         modifier = 1000
         for x in patients_nums:
             idx = patients_nums.index(x) + 1
-            print('Random filling of dataset %d/%d'
-                  % (idx, len(patients_nums)))
-            D_temp = Dataset()
-            D_temp.random_fill(x*modifier)
-            key = 'rand_%d' % idx + '_%d' % (x*modifier)
-            loadedDatasets[key] = D_temp
+            print(f'Random filling of dataset {idx}/{len(patients_nums)}')
+            temporary_dataset = Dataset()
+            temporary_dataset.random_fill(os.path.join(random_fill_save_path, 'temp'),
+                                          x*modifier)
+            key = f'rand_{idx}' + f'_{x*modifier}'
+            loaded_datasets[key] = temporary_dataset
             eval_results_dict[key] = {'time': [], 'rmse': []}
     else:
-        for path in datasetList:
-            print('Loading dataset %d/%d'
-                  % (datasetList.index(path) + 1, len(datasetList)))
-            pathToDataset = os.path.dirname(path)
-            nameFile = os.path.basename(path)
-            D_temp = Dataset()
-            D_temp.from_json(pathToDataset, nameFile)
-            key = nameFile.replace('.json', '') + '_%d' % len(D_temp.Patients)
+        for path in dataset_list:
+            print(f'Loading dataset {dataset_list.index(path) + 1}/{len(dataset_list)}')
+            path_to_dataset = os.path.dirname(path)
+            namefile = os.path.basename(path)
+            temporary_dataset = Dataset()
+            temporary_dataset.from_json(path_to_dataset, namefile)
+            key = namefile.replace('.json', '') + f'_{len(temporary_dataset.Patients)}'
 
-            loadedDatasets[key] = D_temp
+            loaded_datasets[key] = temporary_dataset
             eval_results_dict[key] = {'time': [], 'rmse': []}
 
     # Start gathering evaluation data
-    for D_name, D in loadedDatasets.items():
-        # densities = pd.DataFrame(columns=['true', 'prediction'])
+    for dataset_name, dataset in loaded_datasets.items():
         for it in range(int(iterations)):
-            num_pat = len(D.Patients)
-            condition_pool = [x.id for x in D.Conditions]
+            num_patients = len(dataset.Patients)
+            condition_pool = [x.id for x in dataset.Conditions]
 
             # Chose random condition
             query_condition = choice(condition_pool)
-            print('Condition in evaluation: %s' % query_condition)
+            print(f'Condition in evaluation: {query_condition}')
 
             start_time = time()
 
             # Make utility matrix for that condition
-            utility_matrix = D.make_utility_matrix(query_condition)
+            utility_matrix = dataset.make_utility_matrix(query_condition)
 
             # Chose random patient and therapy
             query_patient = random_sample_patient(utility_matrix)
@@ -1401,34 +1380,18 @@ def evaluation(datasetList='None', iterations=3):
 
             pred_value = therapy_rating_prediction[query_therapy[0]]
 
-            '''
-            for th in therapy_rating_prediction.index:
-                if th in densities.index:
-                    densities.loc[th]['prediction'] += 1
-                else:
-                    init_serie = pd.Series({'true': 1, 'prediction': 1})
-                    densities.loc[th] = init_serie
-            '''
-
             tot_time = time() - start_time
-            stat_interaction('run_time_%d_patients.txt' % num_pat, tot_time)
+            stat_interaction(stats_save_directory,
+                             f'run_time_{num_patients}_patients.txt',
+                             tot_time)
 
-            rmse = RMSE([true_value], [pred_value], squared=False)
-            stat_interaction('rmse_scores_%s_patients.txt'
-                             % (num_pat), rmse)
+            rmse = RMSE([true_value], [pred_value])
+            stat_interaction(stats_save_directory,
+                             f'rmse_scores_{num_patients}_patients.txt',
+                             rmse)
 
-            eval_results_dict[D_name]['time'].append(tot_time)
-            eval_results_dict[D_name]['rmse'].append(rmse)
-
-        '''
-        fig, ax = plt.subplots(figsize=(16, 9), dpi=120)
-        ax.set_title('Prediction density for {}'.format(D_name))
-        densities.plot.bar(ax=ax, rot=0)
-        ax.grid(True)
-        ax.legend()
-        figureName = 'densities_for_%s.png' % D_name
-        fig.savefig(STATS_DIR + os.sep + figureName, dpi=120)
-        '''
+            eval_results_dict[dataset_name]['time'].append(tot_time)
+            eval_results_dict[dataset_name]['rmse'].append(rmse)
 
     # Make summary dataframe
     eval_results = pd.DataFrame(columns=['mean rmse', 'mean time'])
@@ -1442,61 +1405,66 @@ def evaluation(datasetList='None', iterations=3):
 
         # Make plots
         fig, ax = plt.subplots(1, 2, figsize=(20, 9), dpi=120)
-        fig.suptitle('{} Patients'.format(num_patients), fontsize=24)
+        fig.suptitle(f'{num_patients} Patients', fontsize=24)
         i = 0
-        for el in ['time', 'rmse']:
-            ax[i].plot(range(1, len(eval_dict[el]) + 1), eval_dict[el])
-            ax[i].set_title('Mean {}: {:0.4f}'
-                            .format(el, means['mean %s' % el]),
+        for metric in ['time', 'rmse']:
+            ax[i].plot(range(1, len(eval_dict[metric]) + 1), eval_dict[metric])
+            ax[i].set_title(f'Mean {metric}: {means[f'mean {metric}']:0.4f}',
                             fontsize=24)
             ax[i].set_xlabel('Iteration', fontsize=24)
-            ax[i].set_ylabel(el, fontsize=24)
+            ax[i].set_ylabel(metric, fontsize=24)
             ax[i].grid(True)
             ax[i].tick_params(axis='x', labelsize=20)
             ax[i].tick_params(axis='y', labelsize=20)
             i += 1
         fig.tight_layout()
-        figureName = '%s_patients_rmse_and_time.png' % num_patients
-        fig.savefig(STATS_DIR + os.sep + figureName, dpi=120)
+        rmse_figure_name = f'{num_patients}_patients_rmse_and_time.png'
+        fig.savefig(os.path.join(stats_save_directory, rmse_figure_name), dpi=120)
 
     # Make summary plot
     fig, ax = plt.subplots(1, 2, figsize=(20, 9), dpi=120)
     fig.suptitle('Mean Evaluation scores', fontsize=24)
     i = 0
-    for el in eval_results.columns:
-        ax[i].plot(eval_results[el])
-        ax[i].set_title('{}: {:0.4f}'
-                        .format(el.capitalize(), eval_results[el].mean()),
+    for eval_score in eval_results.columns:
+        ax[i].plot(eval_results[eval_score])
+        ax[i].set_title(f'{eval_score.capitalize()}: {eval_results[eval_score].mean():0.4f}',
                         fontsize=24)
         ax[i].set_xlabel('Patients Datasets', fontsize=24)
-        ax[i].set_ylabel(el, fontsize=24)
+        ax[i].set_ylabel(eval_score, fontsize=24)
         ax[i].grid(True)
         ax[i].tick_params(axis='x', labelsize=20)
         ax[i].tick_params(axis='y', labelsize=20)
         i += 1
     fig.tight_layout()
-    figureName = 'Evaluation_metrics_summary.png'
-    fig.savefig(STATS_DIR + os.sep + figureName, dpi=120)
+    evaluation_figure_name = 'Evaluation_metrics_summary.png'
+    fig.savefig(os.path.join(stats_save_directory, evaluation_figure_name), dpi=120)
 
     print(eval_results)
 
 
 if __name__ == '__main__':
+
+    # Project folders used to store data and results
+    PROJECT_ROOT_DIRECTORY = os.path.dirname(os.path.dirname(__file__))
+    DATA_DIRECTORY = os.path.join(PROJECT_ROOT_DIRECTORY, 'data')
+    RESULTS_DIRECTORY = os.path.join(PROJECT_ROOT_DIRECTORY, 'results')
+    STATS_DIRECTORY = os.path.join(RESULTS_DIRECTORY, 'stats')
+
     # Argparse
-    _desc = 'This module implements a medical recommendation system able to' \
+    DESCRITPION = 'This module implements a medical recommendation system able to' \
             ' provide a suggested set of 5 therapies given a dataset and a ' \
             'patient in the dataset and the condition for which the '\
             'therapies must be suggested.\n' \
             'It is also able to generate a randomly filled dataset given ' \
             'the conditions and therapies pools or website from which to ' \
             'crawl the informations'
-    parser = argparse.ArgumentParser(description=_desc)
+    parser = argparse.ArgumentParser(description=DESCRITPION)
 
-    dataset_help = 'Dataset used both to save and retrieve values.\n' \
+    DATASET_HELP = 'Dataset used both to save and retrieve values.\n' \
                    'The save operation overwites the file.'
     parser.add_argument('-d', metavar='dataset', nargs='+',
-                        default='None',
-                        help=dataset_help)
+                        default=None,
+                        help=DATASET_HELP)
     parser.add_argument('--random-fill', metavar='num', default=None,
                         help='Fills the dataset specified by \'-d\' with '
                              'random \'num\' entries.')
@@ -1526,23 +1494,26 @@ if __name__ == '__main__':
                         help='Use this flag to access the usage statistics of'
                              ' the recommendation system like rmse and time. '
                              'The available data will be read from the '
-                             '{} directory'.format(STATS_DIR))
+                             f'{STATS_DIRECTORY} directory')
     args = parser.parse_args()
 
-    if args.random_fill is not None:
-        check_dirs()
+    DEFAULT_DATASET_NAMEFILE = 'dataset.json'
 
+    if args.random_fill is not None:
         fill_num = int(args.random_fill)
-        D = Dataset()
-        D.random_fill(fill_num)
-        D.Print()
+        random_dataset = Dataset()
+        random_dataset.random_fill(os.path.join(DATA_DIRECTORY), fill_num)
+        random_dataset.Print()
         if args.save:
-            args.d = args.d[0]
-            path = os.path.dirname(args.d)
-            nameFile = os.path.basename(args.d)
+            if args.d is not None:
+                DEFAULT_DATASET_NAMEFILE = os.path.basename(args.d[0])
+            dataset_save_path = os.path.dirname(DEFAULT_DATASET_NAMEFILE)
+            if len(dataset_save_path) == 0:
+                dataset_save_path = os.path.join(DATA_DIRECTORY, 'temp')
+            exists_or_create_directory(dataset_save_path)
             if int(args.sample) > 0:
-                D.sample_not_cured(int(args.sample), saveToJson=True)
-            D.save_in_json(path, nameFile)
+                random_dataset.sample_not_cured(int(args.sample), saveToJson=True)
+            random_dataset.save_in_json(dataset_save_path, DEFAULT_DATASET_NAMEFILE)
 
     if len(args.recommend) > 0:
         if args.c is None and os.sep not in args.recommend[0]:
@@ -1550,7 +1521,7 @@ if __name__ == '__main__':
                   'Use -c followed by the condition id.\n'
                   'Or provide a .json or .txt file having the informations')
         else:
-            check_dirs()
+            exists_or_create_directory(RESULTS_DIRECTORY)
             if len(args.d) == 1:
                 args.d = args.d[0]
             else:
@@ -1560,45 +1531,47 @@ if __name__ == '__main__':
                                         args.save)
             if th is not None:
                 for patient, recommendations in th.items():
-                    fileName = RESULTS_DIR + os.sep + patient + '.json'
+                    fileName = RESULTS_DIRECTORY + os.sep + patient + '.json'
                     recommendations.to_json(fileName, indent=4)
-                    print('Recommendation for Patient ID %s:' % patient)
+                    print(f'Recommendation for Patient ID {patient}:')
                     print(recommendations)
 
     if args.last_run:
         last_results = {}
-        for el in os.listdir(RESULTS_DIR):
+        exists_or_create_directory(RESULTS_DIRECTORY)
+        for el in os.listdir(RESULTS_DIRECTORY):
             if '.json' in el:
-                stream_in = open(RESULTS_DIR + os.sep + el, 'r')
-                loaded_dataframe = pd.DataFrame(json.load(stream_in))
-                stream_in.close()
+                with open(RESULTS_DIRECTORY + os.sep + el, 'r', encoding="utf-8") as stream_in:
+                    loaded_dataframe = pd.DataFrame(json.load(stream_in))
+                    stream_in.close()
                 el = el.replace('.json', '')
                 last_results[el] = loaded_dataframe
-                print('Recommendations for patient %s:' % el)
+                print(f'Recommendations for patient {el}:')
                 print(loaded_dataframe, '\n')
 
     if args.stats:
+        exists_or_create_directory(STATS_DIRECTORY)
         stats = {'run time': {}, 'rmse': {}}
-        for el in os.listdir(STATS_DIR):
+        for el in os.listdir(STATS_DIRECTORY):
             if '.txt' in el:  # All stats saved in .txt files
                 el_no_txt = el.replace('.txt', '')
                 if 'time' in el:
-                    stats['run time'][el_no_txt] = stat_interaction(el)
+                    stats['run time'][el_no_txt] = stat_interaction(STATS_DIRECTORY, el)
                 if 'rmse' in el:
-                    stats['rmse'][el_no_txt] = stat_interaction(el)
+                    stats['rmse'][el_no_txt] = stat_interaction(STATS_DIRECTORY, el)
 
         # print('Run times:')
         for stat in stats:
             for el, item in stats[stat].items():
-                kind = '{} {}'.format(el.split('_')[2], el.split('_')[3])
-                iter_message = '-'*5 + ' %s:' % kind
+                kind = f'{el.split('_')[2]} {el.split('_')[3]}'
+                iter_message = '-'*5 + f' {kind}:'
                 print(stat.upper())
                 print(iter_message, '-'*(40-len(iter_message)))
                 for x in item:
                     print(x)
-                out_message = 'Mean %s: %f' % (stat, (sum(item)/len(item)))
+                out_message = f'Mean {stat}: {(sum(item)/len(item))}'
                 print(out_message, '-'*(40-len(out_message)), '\n')
 
     if int(args.evaluate) > 0:
-        check_dirs()
-        evaluation(args.d, args.evaluate)
+        exists_or_create_directory(STATS_DIRECTORY)
+        evaluation(STATS_DIRECTORY, args.d, args.evaluate, random_fill_save_path=DATA_DIRECTORY)
