@@ -91,7 +91,7 @@ class Entity():
             print(f'The type of {self.id} is changed from \'{self.type}\' to \'{_type}\'')
         self.type = str(_type)
 
-    def toDict(self):
+    def to_dict(self):
         '''
         Returns the data contained in the class as a dictionary.
 
@@ -102,21 +102,21 @@ class Entity():
 
         return self.__dict__
 
-    def fromDict(self, loadedDict):
+    def from_dict(self, loaded_dict):
         '''
         Method to load data from a Dicitonary into the class.
 
-        loadedDict: dict
+        loaded_dict: dict
             Its keys must be: id, name, type.
         '''
 
-        for key, value in loadedDict.items():
+        for key, value in loaded_dict.items():
             if key in self.__dict__.keys():
                 self.__dict__[key] = value
             elif key == 'type':
                 self.update_type(value)
 
-    def Print(self, indent=False):
+    def print(self, indent=False):
         '''
         Prints the informations contained in the class.
 
@@ -124,12 +124,8 @@ class Entity():
             Adds a tab spacing in the formatting of the string.
         '''
 
-        if not indent:
-            for key, value in self.__dict__.items():
-                print('{:<6} : {:<10}'.format(key, value))
-        else:
-            for key, value in self.__dict__.items():
-                print('\t{:<6} : {:<10}'.format(key, value))
+        for key, value in self.__dict__.items():
+            print(f"{'\t' if indent else ''}{key:<6} : {value:<10}")
 
 
 class Condition(Entity):
@@ -221,7 +217,7 @@ class Trial():
 
         self.add_success(success)
 
-    def toDict(self):
+    def to_dict(self):
         '''
         Returns the class dictionary
         '''
@@ -240,21 +236,21 @@ class Trial():
             success = int(success) / 100
         self.successful = f'{success:0.2%}'
 
-    def fromDict(self, loadedDict):
+    def from_dict(self, loaded_dict):
         '''
         Method to load data coming from a loaded dictionary into the
         class.
 
-        loadedDict: dict
+        loaded_dict: dict
             Its keys must be: id, start, end, condition, therapy and
             succesful.
         '''
 
-        for key, value in loadedDict:
+        for key, value in loaded_dict:
             if key in self.__dict__.keys():
                 self.__dict__[key] = value
 
-    def Print(self, indent=False):
+    def print(self, indent=False):
         '''
         Prints the class attributes data.
 
@@ -313,7 +309,7 @@ class PCondition():
 
         self.cured = int(c_date)
 
-    def toDict(self):
+    def to_dict(self):
         '''
         This method returns a json serializable version of the class.
 
@@ -324,20 +320,20 @@ class PCondition():
 
         return self.__dict__
 
-    def fromDict(self, loadedDict):
+    def from_dict(self, loaded_dict):
         '''
         Method to load data coming from a loaded dictionary into the
         class.
 
-        loadedDict: dict
+        loaded_dict: dict
             Its keys must be: id, diagnosed, cured and kind.
         '''
 
-        for key, value in loadedDict:
+        for key, value in loaded_dict:
             if key in self.__dict__.keys():
                 self.__dict__[key] = str(value)
 
-    def Print(self, indent=False):
+    def print(self, indent=False):
         '''
         Prints the elements in the class.
 
@@ -394,7 +390,7 @@ class Patient(Entity):
 
         self.conditions.append(pcondition)
 
-    def toDict(self):
+    def to_dict(self):
         '''
         Retrieve the data of the class gathering them in a dictionary.
 
@@ -404,8 +400,8 @@ class Patient(Entity):
         '''
 
         data = self.__dict__
-        data['conditions'] = [x.toDict() for x in self.conditions]
-        data['trials'] = [x.toDict() for x in self.trials]
+        data['conditions'] = [x.to_dict() for x in self.conditions]
+        data['trials'] = [x.to_dict() for x in self.trials]
         return data
 
     def save_in_json(self, name_file=None):
@@ -457,25 +453,25 @@ class Patient(Entity):
 
         self.from_dict(loaded_patient)
 
-    def from_dict(self, loaded_dictionary):
+    def from_dict(self, loaded_dict):
         '''
         Loads the data coming from a loaded dictionary into the class.
 
-        loaded_dictionary: dict
+        loaded_dict: dict
         '''
 
-        self.id = str(loaded_dictionary['id'])
-        self.name = str(loaded_dictionary['name'])
+        self.id = str(loaded_dict['id'])
+        self.name = str(loaded_dict['name'])
 
-        for c in loaded_dictionary['conditions']:
+        for c in loaded_dict['conditions']:
             temp_c = PCondition(c['id'], c['diagnosed'], c['cured'], c['kind'])
             self.conditions.append(temp_c)
-        for t in loaded_dictionary['trials']:
+        for t in loaded_dict['trials']:
             temp_t = Trial(t['id'], t['start'], t['end'], t['condition'],
                            t['therapy'], t['successful'])
             self.trials.append(temp_t)
 
-    def get_condition(self, pcondition_id):
+    def get_condition(self, pcondition_id) -> str:
         '''
         This method allows to return the Condition id as in the dataset
 
@@ -490,7 +486,7 @@ class Patient(Entity):
             i += 1
             if i == len(self.conditions):
                 print(f'No condition {pcondition_id} in dataset')
-                return
+                return ''
         return self.conditions[i].kind
 
     def get_pcondition(self, condition_id):
@@ -508,7 +504,7 @@ class Patient(Entity):
                 return pc.id
         return
 
-    def Print(self):
+    def print(self):
         '''
         Method used to print all the informations in the patient class.
         '''
@@ -519,7 +515,7 @@ class Patient(Entity):
             else:
                 print(f'{key} :', '-'*31)
                 for t in value:
-                    t.Print(indent=True)
+                    t.print(indent=True)
                     print('\t', '-'*15, '*', '-'*15)
 
 
@@ -547,11 +543,11 @@ class Dataset():
         utility_matrix = pd.DataFrame(columns=[x.id for x in self.Therapies])
         with tqdm(total=len(self.Patients)) as pbar:
             pbar.set_description('Analyzing patients medical_history')
-            for patient in self.Patients:  # For all patients in dataset
+            for patient_entry in self.Patients:  # For all patients in dataset
                 medical_history = {}
-                pcondition = patient.get_pcondition(condition)
+                pcondition = patient_entry.get_pcondition(condition)
                 if pcondition is not None:  # Patient had that condition
-                    for trial in patient.trials:
+                    for trial in patient_entry.trials:
                         if trial.condition == pcondition:
                             success = float(trial.successful.replace('%', ''))
                             if trial.therapy not in medical_history:
@@ -559,7 +555,7 @@ class Dataset():
                             else:
                                 medical_history[trial.therapy] += success
                                 medical_history[trial.therapy] /= 2
-                    utility_matrix.loc[patient.id] = medical_history
+                    utility_matrix.loc[patient_entry.id] = medical_history
                 pbar.update(1)
         pbar.close()
 
@@ -577,8 +573,8 @@ class Dataset():
             utility_matrix.loc[:][therapy] *= normalized_mean_therapy_success
 
         # Normalize rows -> subtract row mean from each patient score
-        for patient in utility_matrix.index:
-            utility_matrix.loc[patient] -= utility_matrix.loc[patient].mean()
+        for patient_row in utility_matrix.index:
+            utility_matrix.loc[patient_row] -= utility_matrix.loc[patient_row].mean()
 
         # Force maximum in the utility matrix to be 1
         utility_matrix /= max(utility_matrix.max())
@@ -586,7 +582,7 @@ class Dataset():
         print(f'Utility matrix has size: {utility_matrix.shape}')
         return utility_matrix
 
-    def get_condition(self, condition_id):
+    def get_condition(self, condition_id) -> str:
         '''
         This method is used to return the name of a condition given
         its id.
@@ -605,7 +601,7 @@ class Dataset():
         for c in self.Conditions:
             if c.id == condition_id:
                 return c.name
-        return
+        return ''
 
     def get_therapy(self, therapy_id):
         '''
@@ -684,9 +680,9 @@ class Dataset():
 
         # data = {x: None for x in self.__dict__.keys()}
         data = {}
-        data['Conditions'] = [x.toDict() for x in self.Conditions]
-        data['Therapies'] = [x.toDict() for x in self.Therapies]
-        data['Patients'] = [x.toDict() for x in self.Patients]
+        data['Conditions'] = [x.to_dict() for x in self.Conditions]
+        data['Therapies'] = [x.to_dict() for x in self.Therapies]
+        data['Patients'] = [x.to_dict() for x in self.Patients]
 
         if os.sep not in file_path:
             file_path = os.path.dirname(os.path.dirname(__file__)) + os.sep + file_path
@@ -721,12 +717,12 @@ class Dataset():
             if key == 'Conditions':
                 for el in value:
                     temp_c = Condition()
-                    temp_c.fromDict(el)
+                    temp_c.from_dict(el)
                     self.Conditions.append(temp_c)
             elif key == 'Therapies':
                 for el in value:
                     temp_t = Therapy()
-                    temp_t.fromDict(el)
+                    temp_t.from_dict(el)
                     self.Therapies.append(temp_t)
             elif key == 'Patients':
                 for el in value:
@@ -740,7 +736,7 @@ class Dataset():
                                        t['condition'], t['therapy'],
                                        t['successful'])
                         temp_p.trials.append(temp_t)
-                    # temp_p.fromDict(el)
+                    # temp_p.from_dict(el)
                     self.Patients.append(temp_p)
 
         tot_entries = sum(len(x) for x in loaded_dataset.values())
@@ -924,25 +920,24 @@ class Dataset():
             stream_out.close()
         return random_sampled_patients
 
-    def Print(self, short=True):
+    def print(self, short=True):
         size = [len(self.Conditions), len(self.Therapies), len(self.Patients)]
-        print('Dataset Size: {} Conditions | {} Therapies | {} Patients\n'
-              .format(size[0], size[1], size[2]))
+        print(f'Dataset Size: {size[0]} Conditions | {size[1]} Therapies | {size[2]} Patients\n')
         if not short:
-            for el in self.__dict__.items():
-                print('-'*80, '\n{}:\n'.format(el[0]))
-                for entry in el[1]:
-                    entry.Print()
+            for key, value in self.__dict__.items():
+                print('-'*80, f'\n{key}:\n')
+                for entry in value:
+                    entry.print()
                     print('\n')
 
 
-def strDate_to_iso(strDate: str='20010101'):
+def strDate_to_iso(str_date: str='20010101'):
     '''
     This function converst a string date to the ISO format.
     Input string must have the date in the format YYYYMMDD
     '''
 
-    iso_str = f'{strDate[:4]}-{strDate[4:6]}-{strDate[6:]}'
+    iso_str = f'{str_date[:4]}-{str_date[4:6]}-{str_date[6:]}'
     date_iso = date.fromisoformat(iso_str)
     return date_iso
 
@@ -989,21 +984,21 @@ def similarity_computation(utility_matrix, query_patient):
         neighbours for the given query patient.
     '''
 
-    '''
-    Cosine similarity is inefficient in case of sparse data:
-    https://stackoverflow.com/questions/45387476/
-        cosine-similarity-between-each-row-in-a-dataframe-in-python
-
-    The euclidean distance in N-dimensions is used. The NaN inside the
-    vectors are temporary filled with 0 in order to avoid mismatch in
-    shape.
-    N.B:
-    If the results of similarities are 0 this is due to the subtraction of
-    the mean, meaning that each patient having the condition and using
-    only one trial is similar to the query one. This may be correct
-    considering that other patients may have cured the desease with just
-    one trial. -> Must check and give it more weight next.
-    '''
+    
+    # Cosine similarity is inefficient in case of sparse data:
+    # https://stackoverflow.com/questions/45387476/
+    #     cosine-similarity-between-each-row-in-a-dataframe-in-python
+    # 
+    # The euclidean distance in N-dimensions is used. The NaN inside the
+    # vectors are temporary filled with 0 in order to avoid mismatch in
+    # shape.
+    # N.B:
+    # If the results of similarities are 0 this is due to the subtraction of
+    # the mean, meaning that each patient having the condition and using
+    # only one trial is similar to the query one. This may be correct
+    # considering that other patients may have cured the desease with just
+    # one trial. -> Must check and give it more weight next.
+    
 
     patient_vec = utility_matrix.loc[query_patient].copy()
     similarities = pd.DataFrame(columns=['euclidean'])
@@ -1019,16 +1014,15 @@ def similarity_computation(utility_matrix, query_patient):
             # cos_sim = cosine_similarity([query_dist, patient_dist])[0, 1]
 
             similarities.loc[patient] = sqrt(square_distance)
-    '''
+
     # Try cosine similarity
-    cosine_sim = cosine_similarity(utility_matrix.copy().fillna(0))
-    i = 0
-    while utility_matrix.index[i] != query_patient:
-        i += 1
-    cosine = pd.Series(cosine_sim[i, :], index=utility_matrix.index)
-    print(list(cosine_sim[i, :]).count(0))
-    similarities['cosine'] = cosine
-    '''
+    # cosine_sim = cosine_similarity(utility_matrix.copy().fillna(0))
+    # i = 0
+    # while utility_matrix.index[i] != query_patient:
+    #     i += 1
+    # cosine = pd.Series(cosine_sim[i, :], index=utility_matrix.index)
+    # print(list(cosine_sim[i, :]).count(0))
+    # similarities['cosine'] = cosine
 
     # Retain nearest neighbours:
     euclidean_threshold = sqrt(sum(query_dist**2))/2
@@ -1065,6 +1059,11 @@ def similarity_computation(utility_matrix, query_patient):
 
 
 def check_fullna(obj, return_mean=False):
+    '''
+    Function to remove NaN elements from a pandas table
+    '''
+
+
     to_return = None
     if isinstance(obj, pd.DataFrame):
         not_nan_shape = obj.dropna(how='all').shape
@@ -1159,14 +1158,14 @@ def rating_computation(utility_matrix, query_patient, nearest_neighbours,
                                             therapy)
             rating = 0.0
             sim_sum = 0.0
-            for patient in nearest_neighbours.index:
-                loc_patient_nan = utility_matrix.loc[patient].isna()
-                loc_patient_score = utility_matrix.loc[patient][therapy]
-                loc_patient_sim = nearest_neighbours.loc[patient]['euclidean']
+            for patient_score in nearest_neighbours.index:
+                loc_patient_nan = utility_matrix.loc[patient_score].isna()
+                loc_patient_score = utility_matrix.loc[patient_score][therapy]
+                loc_patient_sim = nearest_neighbours.loc[patient_score]['euclidean']
                 if not loc_patient_nan[therapy]:
                     partial_rating = loc_patient_score - \
                                      baseline_computation(utility_matrix,
-                                                          patient,
+                                                          patient_score,
                                                           therapy)
                     # Absolute used due to euclidean distance
                     partial_rating *= (1 - abs(loc_patient_sim))
@@ -1254,6 +1253,10 @@ def medical_recommendation(dataset, patients_ids, query_condition, stats_directo
         condition_id = query_patient.get_condition(query_condition[idx])
 
         condition_name = reference_dataset.get_condition(condition_id)
+
+        if condition_id == '' or condition_name == '':
+            continue
+
         print(f'Started Recommendation for patient \'{p_id}\' and condition \'{condition_name}\':')
 
         query_matrix = reference_dataset.make_utility_matrix(condition_id)
@@ -1318,16 +1321,16 @@ def evaluation(stats_save_directory, dataset_list='None', iterations=3, random_f
     loaded_datasets = {}  # List of Dataset classes
     eval_results_dict = {}
 
-    if dataset_list == None:
+    if dataset_list is None:
         patients_nums = [25, 50, 100, 150]
         modifier = 1000
-        for x in patients_nums:
-            idx = patients_nums.index(x) + 1
+        for patient_index in patients_nums:
+            idx = patients_nums.index(patient_index) + 1
             print(f'Random filling of dataset {idx}/{len(patients_nums)}')
             temporary_dataset = Dataset()
             temporary_dataset.random_fill(os.path.join(random_fill_save_path, 'temp'),
-                                          x*modifier)
-            key = f'rand_{idx}' + f'_{x*modifier}'
+                                          patient_index*modifier)
+            key = f'rand_{idx}' + f'_{patient_index*modifier}'
             loaded_datasets[key] = temporary_dataset
             eval_results_dict[key] = {'time': [], 'rmse': []}
     else:
@@ -1344,9 +1347,9 @@ def evaluation(stats_save_directory, dataset_list='None', iterations=3, random_f
 
     # Start gathering evaluation data
     for dataset_name, dataset in loaded_datasets.items():
-        for it in range(int(iterations)):
+        for _ in range(int(iterations)):
             num_patients = len(dataset.Patients)
-            condition_pool = [x.id for x in dataset.Conditions]
+            condition_pool = [condition.id for condition in dataset.Conditions]
 
             # Chose random condition
             query_condition = choice(condition_pool)
@@ -1503,7 +1506,7 @@ if __name__ == '__main__':
         fill_num = int(args.random_fill)
         random_dataset = Dataset()
         random_dataset.random_fill(os.path.join(DATA_DIRECTORY), fill_num)
-        random_dataset.Print()
+        random_dataset.print()
         if args.save:
             if args.d is not None:
                 DEFAULT_DATASET_NAMEFILE = os.path.basename(args.d[0])
