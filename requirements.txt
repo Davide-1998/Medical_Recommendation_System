@@ -1,0 +1,7 @@
+names-dataset
+pandas
+matplotlib
+scikit-learn
+tqdm
+urllib3
+certifi
