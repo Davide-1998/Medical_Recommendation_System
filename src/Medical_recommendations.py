@@ -3,7 +3,6 @@ Main script for evaluating the medical recommendation system
 '''
 
 import argparse
-from datetime import date, timedelta
 import json
 from math import sqrt
 import os
@@ -11,13 +10,10 @@ from random import choice
 from time import time
 
 import pandas as pd
-from tqdm import tqdm
-
-from names_dataset import NameDataset
 from sklearn.metrics import mean_squared_error as RMSE
 import matplotlib.pyplot as plt
 
-from extractor import extract_condition_webpage, extract_therapy_webpage
+from classes.dataset import Dataset
 
 
 def exists_or_create_directory(directory_path: str, access_mode: int=0o777) -> None:
@@ -54,915 +50,6 @@ def stat_interaction(stats_directory_path, filename, what_to_save=None):
     return data
 
 
-class Entity():
-    '''
-    This is the base class that is inherited from the others.
-    It provides methods to retireve an print the data.
-
-    Attributes
-    ----------
-    id: str
-        Unique identifier of the entity.
-    name: str
-        Is the string representing the name of the entity.
-    type: str
-        Is the string representing the type of entity.
-        It's the only optional attribute.
-   '''
-
-    def __init__(self, _id=None, _name=None, _type=None):
-        '''
-        _id: str
-        _name: str
-        _type: str -> optional. Add it using .update_type(_type)
-        '''
-
-        self.id = str(_id)
-        self.name = str(_name)
-        self.type = _type
-
-    def update_type(self, _type):
-        '''
-        _type: str
-            Type of Therapy or Condition.
-        '''
-
-        if 'type' in self.__dict__:
-            print(f'The type of {self.id} is changed from \'{self.type}\' to \'{_type}\'')
-        self.type = str(_type)
-
-    def to_dict(self):
-        '''
-        Returns the data contained in the class as a dictionary.
-
-        Returns
-        -------
-        dict
-        '''
-
-        return self.__dict__
-
-    def from_dict(self, loaded_dict):
-        '''
-        Method to load data from a Dicitonary into the class.
-
-        loaded_dict: dict
-            Its keys must be: id, name, type.
-        '''
-
-        for key, value in loaded_dict.items():
-            if key in self.__dict__.keys():
-                self.__dict__[key] = value
-            elif key == 'type':
-                self.update_type(value)
-
-    def print(self, indent=False):
-        '''
-        Prints the informations contained in the class.
-
-        indent: bool
-            Adds a tab spacing in the formatting of the string.
-        '''
-
-        for key, value in self.__dict__.items():
-            print(f"{'\t' if indent else ''}{key:<6} : {value:<10}")
-
-
-class Condition(Entity):
-    '''
-    Is the class representing the conditions.
-    It inherits directly from the Entity class.
-
-    Attributes
-    ----------
-    id: str
-        Unique idetifier of the condition.
-    name: str
-        Name of the condition.
-    type: str
-        Type of condition.
-    '''
-
-    def __init__(self, _id=None, _name=None, _type=None):
-        super().__init__(_id, _name, _type)
-
-
-class Therapy(Entity):
-    '''
-    Is the class representing the conditions.
-    It inherits directly from the Entity class
-
-    Attributes
-    ----------
-    id: str
-        Unique idetifier of the therapy.
-    name: str
-        Name of the therapy.
-    type: str
-        Type of therapy.
-   '''
-
-    def __init__(self, _id=None, _name=None, _type=None):
-        super().__init__(_id, _name, _type)
-
-
-class Trial():
-    '''
-    Is the class representing the trials of therapies made over the
-    patients for a given condition.
-
-    Attributes
-    ---------
-    id: str
-        Unique identifier of the trial
-    start: int
-        An integer number representing the starting date of treatment.
-        The format used is yyyymmdd .
-    end: int
-        An integer number representing the ending date of treatment.
-        The format used is yyyymmdd .
-    condition: str
-        Is a string representing the condition's unique identifier for
-        which the trial was assigned.
-    therapy: str
-        Is a string representing the therapy's unique identifier which
-        is used in the trial.
-    successful: str
-        Is the percentage of success that the trial had.
-    '''
-
-    def __init__(self, _id=None, start=0, end=0, cond_id=None, th_id=None,
-                 success=0.0):
-        '''
-        _id: str
-            Unique identifier of the Trial
-        start: int
-            Date in which trial started. Format: yyyymmdd
-        end: int
-            Date in which trial ended. Format yyyymmdd.
-        cond_id: str
-            Unique identifier of the condition for which the trial is
-            proposed.
-        th_id: str
-            Unique identifier of the therapy in use.
-        success: float
-            Rate of success of the therapy. Must be between 0 and 1.
-        '''
-
-        self.id = str(_id)
-        self.start = str(start)
-        self.end = str(end)
-        self.condition = str(cond_id)
-        self.therapy = str(th_id)
-
-        self.add_success(success)
-
-    def to_dict(self):
-        '''
-        Returns the class dictionary
-        '''
-
-        return self.__dict__
-
-    def add_success(self, success):
-        '''
-        Add a success rate and converts it into a percentage.
-        Values higher than 1 are shifted in the 0-1 interval.
-        '''
-
-        if isinstance(success, str):  # Avoid error during load of percentage
-            success = float(success.replace('%', ''))
-        if int(success) >= 1:
-            success = int(success) / 100
-        self.successful = f'{success:0.2%}'
-
-    def from_dict(self, loaded_dict):
-        '''
-        Method to load data coming from a loaded dictionary into the
-        class.
-
-        loaded_dict: dict
-            Its keys must be: id, start, end, condition, therapy and
-            succesful.
-        '''
-
-        for key, value in loaded_dict:
-            if key in self.__dict__.keys():
-                self.__dict__[key] = value
-
-    def print(self, indent=False):
-        '''
-        Prints the class attributes data.
-
-        indent: bool
-            Adds a tab spacing in the formatting of the string.
-        '''
-
-        for key, value in self.__dict__.items():
-            print(f"{'\t' if indent else ''}{key:<10} : {value:<10}")
-
-
-class PCondition():
-    '''
-    Is the class representing the condition that a patient has
-    or had.
-
-    Attributes
-    ----------
-    id: str
-        Unique identifier of patient condition
-    diagnosed: int
-        The date in which the condition was first diagnosed
-    cured: int
-        The date in which the condition was cured
-    kind: str
-        Is the unique identifier of the Condition class to which the
-        condition belongs to. (i.e. Condition.id )
-    '''
-
-    def __init__(self, _id=None, d_date='None', c_date='None', kind=None):
-        '''
-        _id: str
-            Unique identifier of the specific condition.
-            Condition - Patient relation.
-        d_date: int
-            Date of first diagnosed.
-        c_date: int
-            Date of cure.
-        kind: Condition.id
-            Id of condition. Condition - Condition pool relation.
-        '''
-
-        self.id = str(_id)
-        self.diagnosed = str(d_date)
-        self.cured = str(c_date)
-        self.kind = str(kind)
-
-    def set_cured(self, c_date=0):
-        '''
-        This method is used to set the date of when the condition is
-        cured.
-
-        c_date: int
-            Date in which the condition is considered cured.
-        '''
-
-        self.cured = int(c_date)
-
-    def to_dict(self):
-        '''
-        This method returns a json serializable version of the class.
-
-        Return
-        ------
-        dict
-        '''
-
-        return self.__dict__
-
-    def from_dict(self, loaded_dict):
-        '''
-        Method to load data coming from a loaded dictionary into the
-        class.
-
-        loaded_dict: dict
-            Its keys must be: id, diagnosed, cured and kind.
-        '''
-
-        for key, value in loaded_dict:
-            if key in self.__dict__.keys():
-                self.__dict__[key] = str(value)
-
-    def print(self, indent=False):
-        '''
-        Prints the elements in the class.
-
-        indent: bool
-            Adds a tab spacing in the formatting of the string.
-        '''
-
-        if not indent:
-            for key, value in self.__dict__.items():
-                print('{:<10} : {:<10}'.format(key, value))
-        else:
-            for key, value in self.__dict__.items():
-                print('\t{:<10} : {:<10}'.format(key, value))
-
-
-class Patient(Entity):
-    '''
-    Is the class reresenting the Patients.
-
-    Attributes
-    ----------
-    id: str
-        Unique identifier of the patient -> Inherited by Entity class.
-    name: str
-        Name of the patient -> Inherited by Entity class.
-    conditions: list of PCondition
-        Is the list containing the conditions to which the patient
-        was subjected to. Is its medical history.
-    trials: list of Trial
-        Is the list of trials the patient undergone.
-    '''
-
-    def __init__(self, _id=None, _name=None):
-        super().__init__(_id, _name)
-        self.id = str(self.id)
-        self.conditions = []
-        self.trials = []
-
-    def add_trial(self, trial):
-        '''
-        Adds a Trial element ot the trials list.
-
-        trial: Trial
-        '''
-
-        self.trials.append(trial)
-
-    def add_condition(self, pcondition):
-        '''
-        Adds a condition to the Condition list.
-
-        condition: PCondition
-        '''
-
-        self.conditions.append(pcondition)
-
-    def to_dict(self):
-        '''
-        Retrieve the data of the class gathering them in a dictionary.
-
-        Returns
-        -------
-        dict
-        '''
-
-        data = self.__dict__
-        data['conditions'] = [x.to_dict() for x in self.conditions]
-        data['trials'] = [x.to_dict() for x in self.trials]
-        return data
-
-    def save_in_json(self, name_file=None):
-        '''
-        Method to save the Patient class in a .json file on the device.
-
-        name_file: str
-            FileName in which to save the class. If None a combination
-            of the id and the name will be used as the name. If
-            a string is given, if it doesn't contain a path, the local
-            one is assumed: os.getcwd() .
-        '''
-
-        data = self.__dict__
-        if name_file is None:
-            name_file = os.getcwd() + os.sep
-            name_file += f'{self.id}_{self.name}'
-        else:
-            if os.sep not in name_file:
-                name_file = os.getcwd() + os.sep + name_file
-            else:
-                if not os.path.isfile(name_file):
-                    print(f'No file \'{name_file}\' found.')
-        if '.json' not in name_file:
-            name_file += '.json'
-
-        with open(name_file, 'w', encoding="utf-8") as stream_out:
-            json.dump(data, stream_out, indent=4)
-            stream_out.close()
-
-    def from_json(self, name_file, path_to_file=None):
-        '''
-        This method allows to load a json file of a patient in the
-        class.
-
-        name_file: str
-            Is the name of the file from which data will be collected.
-        path_to_file: str
-            Filepath in which the file is located. If None the local
-            one is assumed: os.getcwd()
-        '''
-
-        if path_to_file is None:
-            path_to_file = os.getcwd() + os.sep
-
-        with open(path_to_file + name_file, 'r', encoding="utf-8") as json_stream_in:
-            loaded_patient = json.load(json_stream_in)
-        json_stream_in.close()
-
-        self.from_dict(loaded_patient)
-
-    def from_dict(self, loaded_dict):
-        '''
-        Loads the data coming from a loaded dictionary into the class.
-
-        loaded_dict: dict
-        '''
-
-        self.id = str(loaded_dict['id'])
-        self.name = str(loaded_dict['name'])
-
-        for c in loaded_dict['conditions']:
-            temp_c = PCondition(c['id'], c['diagnosed'], c['cured'], c['kind'])
-            self.conditions.append(temp_c)
-        for t in loaded_dict['trials']:
-            temp_t = Trial(t['id'], t['start'], t['end'], t['condition'],
-                           t['therapy'], t['successful'])
-            self.trials.append(temp_t)
-
-    def get_condition(self, pcondition_id) -> str:
-        '''
-        This method allows to return the Condition id as in the dataset
-
-        Arguments
-        ---------
-        pcondition_id: str
-            Unique identifier of the pcondition in the patient class
-        '''
-
-        i = 0
-        while self.conditions[i].id != pcondition_id:
-            i += 1
-            if i == len(self.conditions):
-                print(f'No condition {pcondition_id} in dataset')
-                return ''
-        return self.conditions[i].kind
-
-    def get_pcondition(self, condition_id):
-        '''
-        This method is used to translate an input condition to a Pcondition id.
-
-        Arguments
-        ---------
-        condition_id: str
-            Is the unique identifier of the condition to search for
-        '''
-
-        for pc in self.conditions:
-            if pc.kind == condition_id:
-                return pc.id
-        return
-
-    def print(self):
-        '''
-        Method used to print all the informations in the patient class.
-        '''
-
-        for key, value in self.__dict__.items():
-            if not isinstance(value, list):
-                print(f'{key:<10} : {value:<10}')
-            else:
-                print(f'{key} :', '-'*31)
-                for t in value:
-                    t.print(indent=True)
-                    print('\t', '-'*15, '*', '-'*15)
-
-
-class Dataset():
-    '''
-    Class used to represent the dataset containing the Patients,
-    Conditions and Therapies.
-
-    Attributes
-    ----------
-    Conditions: list of Condition
-        Conditions known in the dataset.
-    Therapies: list of Therapy
-        Therapies known in the dataset
-    Patients: list of Patient
-        Patient entries in the dataset
-    '''
-
-    def __init__(self):
-        self.Conditions = []
-        self.Therapies = []
-        self.Patients = []
-
-    def make_utility_matrix(self, condition):
-        utility_matrix = pd.DataFrame(columns=[x.id for x in self.Therapies])
-        with tqdm(total=len(self.Patients)) as pbar:
-            pbar.set_description('Analyzing patients medical_history')
-            for patient_entry in self.Patients:  # For all patients in dataset
-                medical_history = {}
-                pcondition = patient_entry.get_pcondition(condition)
-                if pcondition is not None:  # Patient had that condition
-                    for trial in patient_entry.trials:
-                        if trial.condition == pcondition:
-                            success = float(trial.successful.replace('%', ''))
-                            if trial.therapy not in medical_history:
-                                medical_history[trial.therapy] = success
-                            else:
-                                medical_history[trial.therapy] += success
-                                medical_history[trial.therapy] /= 2
-                    utility_matrix.loc[patient_entry.id] = medical_history
-                pbar.update(1)
-        pbar.close()
-
-        # Drop empty columns -> avoid wasting space
-        utility_matrix.dropna(how='all', axis=1, inplace=True)
-
-        if 0 in utility_matrix.shape:
-            print('No query matrix created, too less data.')
-            return
-
-        # Therapies weighted by their response over the patients
-        for therapy in utility_matrix.columns:
-            patients = utility_matrix.loc[:][therapy].copy()
-            normalized_mean_therapy_success = patients.mean() / 100
-            utility_matrix.loc[:][therapy] *= normalized_mean_therapy_success
-
-        # Normalize rows -> subtract row mean from each patient score
-        for patient_row in utility_matrix.index:
-            utility_matrix.loc[patient_row] -= utility_matrix.loc[patient_row].mean()
-
-        # Force maximum in the utility matrix to be 1
-        utility_matrix /= max(utility_matrix.max())
-
-        print(f'Utility matrix has size: {utility_matrix.shape}')
-        return utility_matrix
-
-    def get_condition(self, condition_id) -> str:
-        '''
-        This method is used to return the name of a condition given
-        its id.
-
-        Arguments
-        ---------
-        condition_id: str
-            Is the unique identifier of the condition.
-
-        Returns
-        -------
-        str:
-            Is the name of the condition.
-        '''
-
-        for c in self.Conditions:
-            if c.id == condition_id:
-                return c.name
-        return ''
-
-    def get_therapy(self, therapy_id):
-        '''
-        This method is used to return the name and type of a therapy given
-        its id.
-
-        Arguments
-        ---------
-        therapy_id: str
-            Is the unique identifier of the therapy.
-
-        Returns
-        -------
-        list of str:
-            It contains the name and type of therapy in the first and second
-            position respectively.
-        '''
-
-        for th in self.Therapies:
-            if th.id == therapy_id:
-                return [th.name, th.type]
-        return []
-
-    def get_patient(self, patient_id):
-        '''
-        This method is used to retrive the patient with a specific id from the
-        dataset.
-
-        Arguments
-        ---------
-        patient_id: str
-            Unique identifier of the patient in the dataset
-        '''
-
-        i = 0
-        while self.Patients[i].id != patient_id:
-            i += 1
-            if i == len(self.Patients):
-                print('No patient with ID {} in the dataset'
-                      .format(patient_id))
-                return None
-        else:
-            return self.Patients[i]
-
-    def add_entry(self, entry):
-        '''
-        Adds an entry to the dataset.
-
-        entry: Condition / Therapy / Patient
-        '''
-
-        if not isinstance(entry, (Condition, Therapy, Patient)):
-            print('Invalid entry type.')
-            return
-
-        if isinstance(entry, Condition):
-            self.Conditions.append(entry)
-        elif isinstance(entry, Therapy):
-            self.Therapies.append(entry)
-        else:
-            self.Patients.append(entry)
-
-    def save_in_json(self, file_path=os.path.dirname(os.path.dirname(__file__)),
-                     name_file='Dataset.json'):
-        '''
-        Method used to save the class data into a .json file.
-
-        Arguments
-        ---------
-        file_path: str
-            Path in which to save the json file. If None the local one is
-            assumed.
-        name_file: str
-            Is the name under which the file is saved.
-        '''
-
-        # data = {x: None for x in self.__dict__.keys()}
-        data = {}
-        data['Conditions'] = [x.to_dict() for x in self.Conditions]
-        data['Therapies'] = [x.to_dict() for x in self.Therapies]
-        data['Patients'] = [x.to_dict() for x in self.Patients]
-
-        if os.sep not in file_path:
-            file_path = os.path.dirname(os.path.dirname(__file__)) + os.sep + file_path
-        if file_path[-1] != os.sep:
-            file_path += os.sep
-        with open(file_path + name_file, 'w', encoding="utf-8") as json_stream_out:
-            json.dump(data, json_stream_out, indent=4)
-        json_stream_out.close()
-
-    def from_json(self, file_path=os.path.dirname(os.path.dirname(__file__)),
-                  name_file='Dataset.json'):
-        '''
-        Loads a json file data into the Dataset class.
-
-        file_path: str
-            Path from which the file is taken.
-        name_file: str
-            Name of the file from which to load
-        '''
-
-        if file_path is None or file_path == '':
-            file_path = os.path.dirname(os.path.dirname(__file__))
-
-        if file_path[-1] != os.sep:
-            file_path += os.sep
-
-        with open(file_path + name_file, 'r', encoding="utf-8") as json_stream_in:
-            loaded_dataset = json.load(json_stream_in)
-        json_stream_in.close()
-
-        for key, value in loaded_dataset.items():
-            if key == 'Conditions':
-                for el in value:
-                    temp_c = Condition()
-                    temp_c.from_dict(el)
-                    self.Conditions.append(temp_c)
-            elif key == 'Therapies':
-                for el in value:
-                    temp_t = Therapy()
-                    temp_t.from_dict(el)
-                    self.Therapies.append(temp_t)
-            elif key == 'Patients':
-                for el in value:
-                    temp_p = Patient(el['id'], el['name'])
-                    for c in el['conditions']:
-                        temp_pc = PCondition(c['id'], c['diagnosed'],
-                                             c['cured'], c['kind'])
-                        temp_p.conditions.append(temp_pc)
-                    for t in el['trials']:
-                        temp_t = Trial(t['id'], t['start'], t['end'],
-                                       t['condition'], t['therapy'],
-                                       t['successful'])
-                        temp_p.trials.append(temp_t)
-                    # temp_p.from_dict(el)
-                    self.Patients.append(temp_p)
-
-        tot_entries = sum(len(x) for x in loaded_dataset.values())
-        print(f'Added {tot_entries} entries to the dataset')
-
-    def random_fill(self, result_save_path, patients_num=0):
-        '''
-        Method to randommly fill a Dataset class with random data.
-        It uses a pool for the conditions and therapies names.
-        The pools are generated by downloading the respective reference
-        websites and process the webpages. For the download and
-        processing the extractor.py script is used.
-        Dataset is filled with random data and using a random
-        number of Conditions, Therapies and patients. Whenever the
-        Conditions and therapies pools run out the remaining part of
-        the dataset is filled by Patient entries.
-
-        patients_num: int
-            Is the number of patients that must be inside the dataset
-            together with all the available conditions and therapies.
-        '''
-
-        target_dir = os.path.join(result_save_path, 'temp')
-
-        conditions_file = target_dir + os.sep + 'Conditions.html'
-        conditions_url = 'https://www.nhsinform.scot/illnesses-and-conditions/a-to-z'
-        conditions_name_pool = extract_condition_webpage(conditions_url, False, conditions_file)
-
-        therapies_file = target_dir + os.sep + 'Therapies.html'
-        therapies_url = 'https://en.wikipedia.org/wiki/List_of_therapies'
-        therapies_name_pool = extract_therapy_webpage(therapies_url, False, therapies_file)
-
-        names_pool = NameDataset()
-        firstN_pool = list(names_pool.first_names)
-        lastN_pool = list(names_pool.last_names)
-        nameID_pool = list(range(1, len(firstN_pool)))
-
-        # Add all conditions available in the dataset
-        with tqdm(total=len(conditions_name_pool)) as pbar:
-            pbar.set_description('Adding conditions to dataset')
-            for condition in conditions_name_pool:
-                cond_index = conditions_name_pool.index(condition)
-                cond_id = f'Cond{cond_index + 1}'
-                temp_cond = Condition(cond_id, condition[0], condition[1])
-                self.add_entry(temp_cond)
-                pbar.update(1)
-        pbar.close()
-
-        # Add all therapies available in the dataset
-        with tqdm(total=len(therapies_name_pool)) as pbar:
-            pbar.set_description('Adding therapies to dataset')
-            for i in range(len(therapies_name_pool)):
-                ther_id = f'Th{i+1}'
-                therapy = therapies_name_pool[i]
-                temp_ther = Therapy(ther_id, therapy[0], therapy[1])
-                self.add_entry(temp_ther)
-                pbar.update(1)
-        pbar.close()
-
-        with tqdm(total=patients_num) as pbar:
-            pbar.set_description('Adding patients to dataset')
-
-            # Add the requested amount of patients
-            for i in range(patients_num):
-                # Name and ID generation --------------------------------------
-                first_name = choice(firstN_pool)
-                last_name = choice(lastN_pool)
-                name_id = choice(nameID_pool)
-                nameID_pool.remove(name_id)  # Ensures uniqueness of ID
-
-                # Patient class instance --------------------------------------
-                rand_patient = Patient(name_id, last_name + ' ' + first_name)
-
-                # Age and ranges determination --------------------------------
-                max_livable_years = 100  # Humans live around 100 years
-
-                age = choice(range(max_livable_years + 1))
-
-                birth_date = date.today()
-                life_delta = timedelta(days=365*age)
-                birth_date -= life_delta
-
-                death = choice(range((max_livable_years+1)-age))
-                death_date = birth_date + timedelta(days=(365*death)+365)
-
-                # Fill medical history of conditions -> max 10 conditions -----
-                for num_cond in range(1, choice(range(2, 11))):
-                    rand_cond = choice(self.Conditions)
-
-                    rand_d_date = random_date(birth_date, death_date)
-                    rand_c_date = None
-                    if choice(range(1, 11, 1)) >= 2:  # 20% chance no cured
-                        rand_c_date = random_date(rand_d_date, death_date)
-                    if rand_c_date is None:
-                        rand_c_date = str(rand_c_date)  # Saves 'None'
-                    temp_pcond = PCondition(f'pc{num_cond}',
-                                            rand_d_date, rand_c_date,
-                                            rand_cond.id)
-                    rand_patient.add_condition(temp_pcond)
-
-                # Fill trials history -----------------------------------------
-                for cond in rand_patient.conditions:
-                    last_trial = None
-                    cured = False
-                    for trial_num in range(1, choice(range(2, 11))):  # max 10 trials
-                        chosen_therapies_pool = []
-                        if not cured:
-                            start_cond = cond.diagnosed
-                            end_cond = cond.cured
-                            if end_cond == 'None':
-                                end_cond = death_date
-
-                            if last_trial is None:  # Initialize start of trial
-                                last_trial = random_date(start_cond, end_cond)
-                            end_trial = random_date(last_trial, end_cond)
-
-                            temp_th = choice(self.Therapies)
-
-                            # Avoid duplicated therapies
-                            if temp_th.id in chosen_therapies_pool:
-                                while temp_th.id in chosen_therapies_pool:
-                                    temp_th = choice(self.Therapies)
-                            chosen_therapies_pool.append(temp_th.id)
-
-                            success = choice(range(0, 101, 1)) / 100
-
-                            if success == 1:
-                                if rand_c_date != 'None':
-                                    cured = True
-                                else:
-                                    success = choice(range(0, 100, 1)) / 100
-                            temp_trial = Trial(f'tr{trial_num}',
-                                               last_trial, end_trial,
-                                               cond.id, temp_th.id,
-                                               success)
-                            rand_patient.add_trial(temp_trial)
-                            last_trial = end_trial  # No retroactive trials
-                self.add_entry(rand_patient)
-                pbar.update(1)
-        pbar.close()
-
-    def sample_not_cured(self, num_to_sample=1, saveToJson=False):
-        '''
-        This method is used to randomly sample N patients from the dataset
-        which have at least one condition that is not cured yet.
-
-        Arguments
-        ---------
-        num_to_sample: int
-            Integer number representing the number of patients to sample
-        saveToJson: bool
-            Flags whether or not to save the sampled patients ids into as
-            a list in a .json file.
-        '''
-
-        num_pat = len(self.Patients)
-        if num_pat == 0:
-            print('No patients in the dataset.\n'
-                  'Load a dataset or random fill it')
-            return
-        if num_pat < num_to_sample:
-            print('Not enough patients in the dataset')
-            return
-
-        patients_not_cured = []
-        for patient in self.Patients:
-            for cond in patient.conditions:
-                if cond.cured == 'None':
-                    patients_not_cured.append([patient.id, cond.id])
-                    break  # Ensures one condion per patient
-
-        random_sampled_patients = []
-        for i in range(num_to_sample):
-            chosen = choice(patients_not_cured)
-            random_sampled_patients.append(chosen)
-        if saveToJson:
-            target_dir = os.path.abspath('../data')
-            fileName = '%d_uncured_patients.json' % num_to_sample
-            stream_out = open(target_dir + os.sep + fileName, 'w')
-            json.dump(random_sampled_patients, stream_out, indent=4)
-            stream_out.close()
-        return random_sampled_patients
-
-    def print(self, short=True):
-        size = [len(self.Conditions), len(self.Therapies), len(self.Patients)]
-        print(f'Dataset Size: {size[0]} Conditions | {size[1]} Therapies | {size[2]} Patients\n')
-        if not short:
-            for key, value in self.__dict__.items():
-                print('-'*80, f'\n{key}:\n')
-                for entry in value:
-                    entry.print()
-                    print('\n')
-
-
-def strDate_to_iso(str_date: str='20010101'):
-    '''
-    This function converst a string date to the ISO format.
-    Input string must have the date in the format YYYYMMDD
-    '''
-
-    iso_str = f'{str_date[:4]}-{str_date[4:6]}-{str_date[6:]}'
-    date_iso = date.fromisoformat(iso_str)
-    return date_iso
-
-
-def random_date(start_date='20010101', end_date='20010101'):
-    '''
-    This function generates a random date between
-    start_date and end_date. Both parameters must be
-    strings in the format YYYYMMDD default is 20010101
-    1st January 2001
-    '''
-
-    if end_date is None or end_date == 'None':
-        end_date = date.today()
-    if isinstance(start_date, str):
-        start_date = strDate_to_iso(start_date)
-    if isinstance(end_date, str):
-        end_date = strDate_to_iso(end_date)
-
-    delta = end_date - start_date
-    rand_delta = choice(range(delta.days+1))
-    rand_date = start_date + timedelta(days=rand_delta)
-    return rand_date.strftime('%Y%m%d')
-
-
 def similarity_computation(utility_matrix, query_patient):
     '''
     This method computes the similarity score among the patients
@@ -984,11 +71,10 @@ def similarity_computation(utility_matrix, query_patient):
         neighbours for the given query patient.
     '''
 
-    
     # Cosine similarity is inefficient in case of sparse data:
     # https://stackoverflow.com/questions/45387476/
     #     cosine-similarity-between-each-row-in-a-dataframe-in-python
-    # 
+    #
     # The euclidean distance in N-dimensions is used. The NaN inside the
     # vectors are temporary filled with 0 in order to avoid mismatch in
     # shape.
@@ -998,22 +84,21 @@ def similarity_computation(utility_matrix, query_patient):
     # only one trial is similar to the query one. This may be correct
     # considering that other patients may have cured the desease with just
     # one trial. -> Must check and give it more weight next.
-    
 
     patient_vec = utility_matrix.loc[query_patient].copy()
     similarities = pd.DataFrame(columns=['euclidean'])
 
     # Try N-dimensional euclidean distance
     query_dist = patient_vec.copy().fillna(0)
-    for patient in utility_matrix.index:
-        if patient != query_patient:
-            patient_dist = utility_matrix.loc[patient].copy().fillna(0)
+    for patient_id in utility_matrix.index:
+        if patient_id != query_patient:
+            patient_dist = utility_matrix.loc[patient_id].copy().fillna(0)
             square_distance = sum((patient_dist - query_dist)**2)
 
             # Cosine sim:
             # cos_sim = cosine_similarity([query_dist, patient_dist])[0, 1]
 
-            similarities.loc[patient] = sqrt(square_distance)
+            similarities.loc[patient_id] = sqrt(square_distance)
 
     # Try cosine similarity
     # cosine_sim = cosine_similarity(utility_matrix.copy().fillna(0))
@@ -1038,11 +123,11 @@ def similarity_computation(utility_matrix, query_patient):
         lb = biology_vec * (1 - response_tolerance)  # Lower bound of tolerance
         ub = biology_vec * (1 + response_tolerance)  # Upper bound of tolerance
         th_filter = biology_vec.index
-        for patient in utility_matrix.index:
-            if patient != query_patient:
-                utility_patient = utility_matrix.loc[patient][th_filter].copy()
+        for patient_id in utility_matrix.index:
+            if patient_id != query_patient:
+                utility_patient = utility_matrix.loc[patient_id][th_filter].copy()
                 retained = utility_patient[utility_patient.between(lb, ub)]
-                same_biology.loc[patient] = retained
+                same_biology.loc[patient_id] = retained
         # same_biology = same_biology[same_biology[:] == biology_vec[:]].dropna()
         same_biology = same_biology.dropna()
         print(f'Same biology matrix has size: {same_biology.shape}')
@@ -1051,8 +136,8 @@ def similarity_computation(utility_matrix, query_patient):
                                                  axis=0).copy()
         # Increase (relatively) the similarity for those patients that has a
         # Similar biology
-        for patient in intersection.index:
-            nearest_neighbours.loc[patient]['euclidean'] -= 1
+        for patient_id in intersection.index:
+            nearest_neighbours.loc[patient_id]['euclidean'] -= 1
         # similarities.loc[patient]['cosine'] *= 2
 
     return nearest_neighbours
@@ -1281,7 +366,7 @@ def medical_recommendation(dataset, patients_ids, query_condition, stats_directo
         # Saving time statistics
         tot_time = time() - start_time
         stat_interaction(stats_directory_path,
-                         f'run_time_{len(reference_dataset.Patients)}_patients.txt',
+                         f'run_time_{len(reference_dataset.patients)}_patients.txt',
                          tot_time)
         print(f'Recommendation time: {tot_time:0.4f}[s]')
     return therapy_ans
@@ -1340,7 +425,7 @@ def evaluation(stats_save_directory, dataset_list='None', iterations=3, random_f
             namefile = os.path.basename(path)
             temporary_dataset = Dataset()
             temporary_dataset.from_json(path_to_dataset, namefile)
-            key = namefile.replace('.json', '') + f'_{len(temporary_dataset.Patients)}'
+            key = namefile.replace('.json', '') + f'_{len(temporary_dataset.patients)}'
 
             loaded_datasets[key] = temporary_dataset
             eval_results_dict[key] = {'time': [], 'rmse': []}
@@ -1348,8 +433,8 @@ def evaluation(stats_save_directory, dataset_list='None', iterations=3, random_f
     # Start gathering evaluation data
     for dataset_name, dataset in loaded_datasets.items():
         for _ in range(int(iterations)):
-            num_patients = len(dataset.Patients)
-            condition_pool = [condition.id for condition in dataset.Conditions]
+            num_patients = len(dataset.patients)
+            condition_pool = [condition.id for condition in dataset.conditions]
 
             # Chose random condition
             query_condition = choice(condition_pool)
@@ -1515,7 +600,7 @@ if __name__ == '__main__':
                 dataset_save_path = os.path.join(DATA_DIRECTORY, 'temp')
             exists_or_create_directory(dataset_save_path)
             if int(args.sample) > 0:
-                random_dataset.sample_not_cured(int(args.sample), saveToJson=True)
+                random_dataset.sample_not_cured(int(args.sample), save_to_json=True)
             random_dataset.save_in_json(dataset_save_path, DEFAULT_DATASET_NAMEFILE)
 
     if len(args.recommend) > 0:
